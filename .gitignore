@@ -227,3 +227,7 @@ project.md
 data/
 # logs in dev env
 logs/ 
+
+
+# database files
+*.db
