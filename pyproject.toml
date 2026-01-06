@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "alembic>=1.17.2",
     "celery[redis]>=5.6.2",
     "fastapi[all]>=0.128.0",
     "faster-whisper>=0.10.0",
@@ -13,6 +14,7 @@ dependencies = [
     "opencv-python-headless>=4.12.0.88",
     "pydantic>=2.6.1",
     "python-dotenv>=1.2.1",
+    "sqlalchemy>=2.0.45",
     "ultralytics>=8.1.0",
 ]
 
@@ -21,3 +23,4 @@ dev = [
     "pytest>=9.0.2",
     "ruff>=0.14.10",
 ]
+

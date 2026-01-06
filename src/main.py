@@ -1,10 +1,11 @@
 import json
-from engine.vision import BugLensVision
+
+from loguru import logger
+
 from engine.audio import BugLensAudio
 from engine.fusion import BugLensFusion
-
+from engine.vision import BugLensVision
 from utils.logging_config import setup_logging
-from loguru import logger
 
 
 @logger.catch  # Automatically catch and log any crash in the entire pipeline
