@@ -61,3 +61,20 @@ async def get_status(job_id: str, db: Session = Depends(get_db)):
         "result": job.result,
         "created_at": job.created_at,
     }
+
+
+@app.get("/jobs")
+async def list_jobs(db: Session = Depends(get_db)):
+    """
+    Returns a list of all bug reports in the system.
+    """
+    jobs = db.query(BugJob).order_by(BugJob.created_at.desc()).all()
+    return [
+        {
+            "id": j.id,
+            "status": j.status,
+            "filename": j.filename,
+            "created_at": j.created_at,
+        }
+        for j in jobs
+    ]
