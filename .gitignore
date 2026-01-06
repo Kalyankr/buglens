@@ -218,3 +218,12 @@ __marimo__/
 
 # models
 *.pt
+
+
+# development
+project.md
+
+# data files
+data/
+# logs in dev env
+logs/ 

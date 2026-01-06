@@ -1,51 +1,35 @@
-from typing import List, Dict
+from loguru import logger
+import json
 
 
 class BugLensFusion:
-    def __init__(self, window_size: float = 3.0):
-        self.window_size = window_size  # seconds to look ahead/behind
+    def __init__(self, window=3.0):
+        self.window = window
 
-    def fuse_signals(self, ui_logs: List[Dict], transcript: List[Dict]):
-        """
-        Alines CV and NLP signals to find the bug's 'Ground Zero'.
-        """
-        fused_events = []
+    def fuse(self, ui_data, audio_data):
+        logger.info("Fusing multimodal signals...")
+        report = []
 
-        # Simple keywords indicating user frustration or intent
-        action_keywords = [
-            "click",
-            "press",
-            "button",
-            "error",
-            "broken",
-            "why",
-            "not working",
-        ]
+        for speech in audio_data:
+            t_start = speech["start"] - self.window
+            t_end = speech["end"] + self.window
 
-        for text_segment in transcript:
-            # Check if user sounds frustrated or describes an action
-            is_relevant = any(
-                kw in text_segment["text"].lower() for kw in action_keywords
-            )
+            # Match visual frames to this speech window
+            relevant_frames = [
+                f
+                for f in ui_data
+                if t_start <= float(f["timestamp"].split("_")[1]) <= t_end
+            ]
 
-            if is_relevant:
-                # Look for UI detections within the time window
-                t_start = text_segment["start"] - self.window_size
-                t_end = text_segment["end"] + self.window_size
+            if relevant_frames:
+                logger.info(f"Found visual correlation for: '{speech['text'][:30]}...'")
+                report.append(
+                    {
+                        "time": speech["start"],
+                        "voice": speech["text"],
+                        "visuals": relevant_frames,
+                    }
+                )
 
-                nearby_ui = [
-                    log
-                    for log in ui_logs
-                    if t_start <= float(log["timestamp"].replace("frame_", "")) <= t_end
-                ]
-
-                if nearby_ui:
-                    fused_events.append(
-                        {
-                            "timestamp": text_segment["start"],
-                            "user_said": text_segment["text"],
-                            "visuals_seen": nearby_ui,
-                        }
-                    )
-
-        return fused_events
+        logger.success("Fusion complete. Finalizing report structure.")
+        return {"status": "Complete", "bug_events": report}
