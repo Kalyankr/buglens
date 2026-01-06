@@ -2,10 +2,15 @@ import ffmpeg
 from faster_whisper import WhisperModel
 from pathlib import Path
 
+import logging
+
+logging.basicConfig()
+logging.getLogger("faster_whisper").setLevel(logging.DEBUG)
+
 
 class BugLensAudio:
-    def __init__(self, model_size: str = "base"):
-        # base is fast; 'large-v3' for higher accuracy
+    def __init__(self, model_size: str = "small"):
+        # base is fast; 'large-v3' for higher accuracy with cuda
         self.model = WhisperModel(model_size, device="cpu", compute_type="int8")
 
     def process_audio(self, video_path: str):
@@ -39,6 +44,6 @@ class BugLensAudio:
 # Test the Audio Engine
 if __name__ == "__main__":
     audio_engine = BugLensAudio()
-    results = audio_engine.process_audio("data/raw/test_bug.mp4")
+    results = audio_engine.process_audio("data/raw/test.mp4")
     for r in results:
         print(f"[{r['start']}s - {r['end']}s]: {r['text']}")

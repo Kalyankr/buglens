@@ -45,6 +45,6 @@ class BugLensVision:
 # Example Usage
 if __name__ == "__main__":
     engine = BugLensVision()
-    frames = engine.extract_frames("test_bug.mp4", "./temp_frames")
+    frames = engine.extract_frames("data/raw/test.mp4", "data/temp_frames")
     ui_logs = engine.detect_ui_elements(frames)
     print(ui_logs)
