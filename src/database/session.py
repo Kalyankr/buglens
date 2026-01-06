@@ -1,7 +1,8 @@
+from loguru import logger
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
 from src.database.models import Base
-from loguru import logger
 
 # SQLite local database file
 SQLALCHEMY_DATABASE_URL = "sqlite:////app/buglens.db"

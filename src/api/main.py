@@ -1,13 +1,14 @@
-from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
-from sqlalchemy.orm import Session
-from loguru import logger
 import shutil
 from pathlib import Path
 
-from src.worker.tasks import process_bug_video
-from src.database.session import get_db, init_db
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from loguru import logger
+from sqlalchemy.orm import Session
+
 from src.database.models import BugJob
+from src.database.session import get_db, init_db
 from src.utils.logging_config import setup_logging
+from src.worker.tasks import process_bug_video
 
 # Initialize logging and database
 setup_logging()

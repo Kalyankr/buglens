@@ -1,10 +1,12 @@
 from loguru import logger
-from .celery_app import celery_app
-from src.database.session import SessionLocal
+
 from src.database.models import BugJob
-from src.engine.vision import BugLensVision
+from src.database.session import SessionLocal
 from src.engine.audio import BugLensAudio
 from src.engine.fusion import BugLensFusion
+from src.engine.vision import BugLensVision
+
+from .celery_app import celery_app
 
 
 @celery_app.task(name="process_bug_video")
