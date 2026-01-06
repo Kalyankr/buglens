@@ -1,7 +1,6 @@
-import pytest
-from src.engine.vision import BugLensVision
 from src.engine.audio import BugLensAudio
 from src.engine.fusion import BugLensFusion
+from src.engine.vision import BugLensVision
 
 
 def test_full_pipeline_logic():

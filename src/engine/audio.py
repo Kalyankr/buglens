@@ -1,7 +1,8 @@
-import ffmpeg
-from loguru import logger
-from faster_whisper import WhisperModel
 from pathlib import Path
+
+import ffmpeg
+from faster_whisper import WhisperModel
+from loguru import logger
 
 
 class BugLensAudio:

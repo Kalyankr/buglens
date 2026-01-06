@@ -1,5 +1,4 @@
 from loguru import logger
-import json
 
 
 class BugLensFusion:

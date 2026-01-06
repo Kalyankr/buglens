@@ -1,8 +1,9 @@
-from loguru import logger
-import ffmpeg
-from ultralytics import YOLO
-from pathlib import Path
 import os
+from pathlib import Path
+
+import ffmpeg
+from loguru import logger
+from ultralytics import YOLO
 
 
 class BugLensVision:
