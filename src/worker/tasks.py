@@ -1,3 +1,6 @@
+import shutil
+from pathlib import Path
+
 from loguru import logger
 
 from src.database.models import BugJob
@@ -47,4 +50,9 @@ def process_bug_video(job_id: str, file_path: str):
         job.error_message = str(e)
         db.commit()
     finally:
+        # Cleanup frames to save disk space
+        temp_path = Path("data/temp_frames")
+        if temp_path.exists():
+            shutil.rmtree(temp_path)
+            logger.debug("Cleaned up temporary frames.")
         db.close()
