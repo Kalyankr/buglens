@@ -10,6 +10,7 @@ dependencies = [
     "fastapi[all]>=0.128.0",
     "faster-whisper>=0.10.0",
     "ffmpeg-python>=0.2.0",
+    "httpx>=0.28.1",
     "loguru>=0.7.3",
     "opencv-python-headless>=4.12.0.88",
     "pydantic>=2.6.1",
