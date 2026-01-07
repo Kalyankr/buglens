@@ -1,7 +1,7 @@
 import shutil
-import httpx
 from pathlib import Path
 
+import httpx
 from loguru import logger
 
 from src.database.models import BugJob
@@ -72,8 +72,11 @@ def generate_llm_summary(fusion_data: dict):
     ollama_url = "http://host.docker.internal:11434/api/generate"
 
     prompt = f"""
-    Analyze this Bug Detection JSON and write a 3-sentence professional bug report.
-    JSON Data: {fusion_data}
+    You are BugLens AI. Summarize this screen recording metadata:
+    Transcript: "{fusion_data}"
+
+    Provide a 2-sentence summary of what happened and 
+    list any potential 'bugs' or 'anomalies'.
     
     Format:
     - Summary: (What happened)
