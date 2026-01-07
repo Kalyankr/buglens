@@ -1,4 +1,5 @@
 import shutil
+import httpx
 from pathlib import Path
 
 from loguru import logger
@@ -38,8 +39,13 @@ def process_bug_video(job_id: str, file_path: str):
         # Fuse Results
         final_report = fuser.fuse(ui_logs, transcript)
 
+        # Generate LLM Summary
+        logger.info("Generating AI Summary via Ollama...")
+        human_summary = generate_llm_summary(final_report)
+
         # Save result and mark as COMPLETED
         job.result = final_report
+        job.summary = human_summary
         job.status = "COMPLETED"
         db.commit()
         logger.success(f"Worker finished Job: {job_id}")
@@ -56,3 +62,31 @@ def process_bug_video(job_id: str, file_path: str):
             shutil.rmtree(temp_path)
             logger.debug("Cleaned up temporary frames.")
         db.close()
+
+
+def generate_llm_summary(fusion_data: dict):
+    """
+    Sends the JSON fusion data to Ollama to generate a human-readable report.
+    """
+    # 'host.docker.internal' is the magic URL to talk to  Mac from Docker
+    ollama_url = "http://host.docker.internal:11434/api/generate"
+
+    prompt = f"""
+    Analyze this Bug Detection JSON and write a 3-sentence professional bug report.
+    JSON Data: {fusion_data}
+    
+    Format:
+    - Summary: (What happened)
+    - Visual Context: (What was seen)
+    - Speech: (What was said)
+    """
+
+    try:
+        response = httpx.post(
+            ollama_url,
+            json={"model": "llama3.2:3b", "prompt": prompt, "stream": False},
+            timeout=30.0,
+        )
+        return response.json().get("response", "Could not generate summary.")
+    except Exception as e:
+        return f"Summarizer error: {str(e)}"

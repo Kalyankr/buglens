@@ -57,6 +57,7 @@ async def get_status(job_id: str, db: Session = Depends(get_db)):
 
     return {
         "job_id": job.id,
+        "summary": job.summary,
         "status": job.status,
         "result": job.result,
         "created_at": job.created_at,
