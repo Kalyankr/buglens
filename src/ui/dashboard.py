@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 import httpx
 import pandas as pd
 import streamlit as st
@@ -24,12 +25,18 @@ st.markdown(
 )
 
 
+# Cache for only 2 seconds to keep it "live" but deduplicated
+@st.cache_data(ttl=2)
+def fetch_api_data(endpoint):
+    return httpx.get(f"{API_URL}{endpoint}")
+
+
 # REFRESH FRAGMENT
 @st.fragment(run_every="30s")
 def render_job_table():
     jobs = []
     try:
-        response = httpx.get(f"{API_URL}/jobs")
+        response = fetch_api_data("/jobs")
         jobs = response.json()
         if jobs:
             df = pd.DataFrame(jobs)
@@ -49,12 +56,97 @@ def render_job_table():
     return []
 
 
-# HEADER & METRICS
+@st.fragment(run_every="30s")
+def render_job_details(job_id):
+    if not job_id:
+        return
+
+    try:
+        response = fetch_api_data(f"/status/{job_id}")
+        if response.status_code != 200:
+            st.warning("Waiting for job record to initialize...")
+            return
+
+        detail = response.json()
+        if detail is None:
+            st.warning("Connecting to job data...")
+            return
+
+        status = detail.get("status")
+
+        # VIDEO PLAYER (WITH START TIME)
+        raw_path = detail.get("file_path", "")
+        if raw_path:
+            clean_path = (
+                Path("/app") / raw_path
+                if not raw_path.startswith("/app")
+                else Path(raw_path)
+            )
+            if clean_path.exists() and clean_path.is_file():
+                st.video(str(clean_path), start_time=st.session_state.video_start_time)
+            else:
+                st.info("Video file syncing...")
+
+        col_l, col_r = st.columns(2)
+
+        with col_l:
+            st.subheader("AI Analysis")
+            if status == "COMPLETED":
+                st.markdown(detail.get("summary", "Summary missing."))
+                report_md = f"# BUG REPORT: {job_id}\n\n{detail.get('summary')}"
+                st.download_button(
+                    "Export to Markdown", report_md, file_name=f"bug_{job_id[:8]}.md"
+                )
+            elif status == "PROCESSING":
+                st.warning("Vision engine running... (Auto-updating)")
+                st.progress(65)
+            else:
+                st.info(f"Status: {status}")
+
+        with col_r:
+            st.subheader("Bug Timeline")
+            result_data = detail.get("result", {})
+
+            # Access the 'bug_events' list
+            events = result_data.get("bug_events", [])
+
+            if status == "COMPLETED" and events:
+                st.write("Click to jump to visual detection:")
+
+                for event in events:
+                    # Get the time for this event
+                    t = event.get("time", 0)
+
+                    # Look into the 'visuals' for labels
+                    visuals = event.get("visuals", [])
+                    if visuals:
+                        # Get the first detection from the first frame of this event
+                        first_frame_detections = visuals[0].get("detections", [])
+                        if first_frame_detections:
+                            label = first_frame_detections[0].get("label", "Unknown")
+                            conf = first_frame_detections[0].get("conf", 0)
+
+                            # Create the button
+                            btn_label = f"{t}s: {label} ({conf:.2f})"
+                            if st.button(btn_label, key=f"t_{job_id}_{t}_{label}"):
+                                st.session_state.video_start_time = t
+                                st.rerun()
+
+            elif status == "PROCESSING":
+                st.info("Timeline will generate after processing.")
+            else:
+                st.write("No specific events detected in this recording.")
+
+    except Exception as e:
+        st.error(f"Sync error: {e}")
+
+
+#  Main UI
 st.title("BugLens AI: Video Bug Reports")
 
 # Initial fetch for metrics
 try:
-    initial_jobs = httpx.get(f"{API_URL}/jobs").json()
+    initial_jobs = fetch_api_data("/jobs").json()
 except httpx.HTTPError as e:
     initial_jobs = []
     st.error(f"Error fetching jobs: {e}")
@@ -96,7 +188,8 @@ if jobs_list:
     )
 
     if selected_id:
-        detail = httpx.get(f"{API_URL}/status/{selected_id}").json()
+        # Action Bar
+        detail = fetch_api_data(f"/status/{selected_id}").json()
 
         # Action Bar: Delete & Export
         if st.button("Delete Job", type="primary"):
@@ -111,47 +204,6 @@ if jobs_list:
                         st.error(f"API Error {response.status_code}: {response.text}")
                 except Exception as e:
                     st.error(f"Connection Error: {e}")
-
-        # Analysis Side-by-Side
-        col_l, col_r = st.columns(2)
-
-        with col_l:
-            st.subheader("AI Analysis")
-            status = detail.get("status")
-
-            if status == "COMPLETED":
-                summary = detail.get("summary", "Summary missing.")
-                st.markdown(summary)
-
-                # Export to Markdown for Jira/GitHub
-                report_md = f"# BUG REPORT: {selected_id}\n\n{summary}\n\\n*Generated by BugLens AI*"
-                st.download_button(
-                    label="Export to Jira/GitHub",
-                    data=report_md,
-                    file_name=f"bug_report_{selected_id[:8]}.md",
-                    mime="text/markdown",
-                    width="content",
-                )
-            elif status == "PROCESSING":
-                st.warning("Worker is currently running YOLOv8 and Whisper...")
-                st.progress(65)
-            elif status == "FAILED":
-                st.error(f"Error: {detail.get('error_message')}")
-
-        with col_r:
-            st.subheader("Metadata & Logs")
-            status = detail.get("status")
-            result_data = detail.get("result")
-
-            if status == "COMPLETED" and result_data:
-                with st.expander("View Raw Fusion Data", expanded=True):
-                    st.json(result_data)
-            elif status == "PROCESSING":
-                st.info("Metadata is being generated...")
-                st.caption(
-                    "Whisper transcript and YOLO logs will appear here once the 'Vision' stage finishes."
-                )
-            else:
-                st.info("Metadata not available yet.")
+        render_job_details(selected_id)
 else:
     st.info("No reports found yet. Use the sidebar to upload your first video.")
