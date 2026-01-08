@@ -1,5 +1,6 @@
 import time
 from pathlib import Path
+
 import httpx
 import pandas as pd
 import streamlit as st
@@ -9,7 +10,11 @@ API_URL = "http://api:8000"
 
 st.set_page_config(page_title="BugLens AI Dashboard", layout="wide")
 
-# CUSTOM CSS FOR BETTER VISUALS
+# Initialize session state for navigation
+if "video_start_time" not in st.session_state:
+    st.session_state.video_start_time = 0
+
+# Custom CSS
 st.markdown(
     """
     <style>
@@ -28,132 +33,144 @@ st.markdown(
 # Cache for only 2 seconds to keep it "live" but deduplicated
 @st.cache_data(ttl=2)
 def fetch_api_data(endpoint):
-    return httpx.get(f"{API_URL}{endpoint}")
+    try:
+        response = httpx.get(f"{API_URL}{endpoint}")
+        if response.status_code == 200:
+            return response
+        else:
+            st.error(f"API Error {response.status_code}: {endpoint}")
+            return None
+    except Exception as e:
+        st.error(f"Connection Error: {e}")
+        return None
 
 
 # REFRESH FRAGMENT
 @st.fragment(run_every="30s")
 def render_job_table():
-    jobs = []
-    try:
-        response = fetch_api_data("/jobs")
+    response = fetch_api_data("/jobs")
+    if response and response.status_code == 200:
         jobs = response.json()
         if jobs:
             df = pd.DataFrame(jobs)
-    except httpx.HTTPError:
-        st.error("Connection lost.")
-    if jobs:
-        df = pd.DataFrame(jobs)
-        # Toast notification for background work
-        processing = df[df["status"] == "PROCESSING"]
-        if not processing.empty:
-            st.toast(f"AI is analyzing {len(processing)} video(s)...", icon="⏳")
+            processing = df[df["status"] == "PROCESSING"]
+            if not processing.empty:
+                st.toast(f"AI is analyzing {len(processing)} video(s)...", icon="⏳")
 
-        # Display simplified table
-        cols_to_show = ["id", "status", "created_at", "filename"]
-        st.dataframe(df[cols_to_show], width="content", hide_index=True)
-        return jobs
+            cols_to_show = ["id", "status", "created_at", "filename"]
+            st.dataframe(df[cols_to_show], width="content", hide_index=True)
+            return jobs
     return []
 
 
-@st.fragment(run_every="30s")
+@st.fragment(run_every="30s")  # Speed up refresh for active investigation
 def render_job_details(job_id):
     if not job_id:
         return
 
-    try:
-        response = fetch_api_data(f"/status/{job_id}")
-        if response.status_code != 200:
-            st.warning("Waiting for job record to initialize...")
-            return
+    response = fetch_api_data(f"/status/{job_id}")
+    if not response or response.status_code != 200:
+        st.warning("Connecting to job data...")
+        return
 
-        detail = response.json()
-        if detail is None:
-            st.warning("Connecting to job data...")
-            return
+    detail = response.json()
+    status = detail.get("status")
 
-        status = detail.get("status")
+    # VIDEO PLAYER SECTION
+    st.subheader("Video Evidence")
 
-        # VIDEO PLAYER (WITH START TIME)
-        raw_path = detail.get("file_path", "")
-        if raw_path:
-            clean_path = (
-                Path("/app") / raw_path
-                if not raw_path.startswith("/app")
-                else Path(raw_path)
+    # Toggle for AI Vision
+    show_vision = st.toggle(
+        "Enable AI Vision Overlay",
+        help="Show detection bounding boxes",
+        key=f"vision_toggle_{job_id}",
+    )
+
+    # --- 1. Resolve Path Logic ---
+    raw_path = detail.get("file_path")
+    vision_path = detail.get("vision_file_path")
+
+    # Determine which file to actually show
+    video_to_play = vision_path if (show_vision and vision_path) else raw_path
+
+    if video_to_play:
+        if not str(video_to_play).startswith("/app"):
+            full_path = Path("/app") / video_to_play
+        else:
+            full_path = Path(video_to_play)
+
+        if full_path.exists():
+            st.video(
+                str(full_path),
+                start_time=st.session_state.video_start_time,
+                format="video/mp4",
             )
-            if clean_path.exists() and clean_path.is_file():
-                st.video(str(clean_path), start_time=st.session_state.video_start_time)
-            else:
-                st.info("Video file syncing...")
+        else:
+            st.warning(f"Looking for file: {full_path}")
+            if raw_path:
+                st.video(str(Path("/app") / raw_path), format="video/mp4")
+    else:
+        st.info("No video path provided by the API.")
 
-        col_l, col_r = st.columns(2)
+    col_l, col_r = st.columns(2)
 
-        with col_l:
-            st.subheader("AI Analysis")
-            if status == "COMPLETED":
-                st.markdown(detail.get("summary", "Summary missing."))
-                report_md = f"# BUG REPORT: {job_id}\n\n{detail.get('summary')}"
-                st.download_button(
-                    "Export to Markdown", report_md, file_name=f"bug_{job_id[:8]}.md"
-                )
-            elif status == "PROCESSING":
-                st.warning("Vision engine running... (Auto-updating)")
-                st.progress(65)
-            else:
-                st.info(f"Status: {status}")
+    with col_l:
+        st.subheader("AI Analysis")
+        if status == "COMPLETED":
+            st.markdown(detail.get("summary", "Summary missing."))
+            report_md = f"# BUG REPORT: {job_id}\n\n{detail.get('summary')}"
+            st.download_button(
+                "Export to Markdown", report_md, file_name=f"bug_{job_id[:8]}.md"
+            )
+        elif status == "PROCESSING":
+            st.warning("Vision engine running... (Auto-updating)")
+            st.progress(65)
+        else:
+            st.info(f"Status: {status}")
 
-        with col_r:
-            st.subheader("Bug Timeline")
-            result_data = detail.get("result", {})
+    with col_r:
+        st.subheader("Bug Timeline")
 
-            # Access the 'bug_events' list
+        result_data = detail.get("result")
+
+        if status == "COMPLETED" and isinstance(result_data, dict):
             events = result_data.get("bug_events", [])
 
-            if status == "COMPLETED" and events:
+            if events:
                 st.write("Click to jump to visual detection:")
-
                 for event in events:
-                    # Get the time for this event
                     t = event.get("time", 0)
-
-                    # Look into the 'visuals' for labels
                     visuals = event.get("visuals", [])
                     if visuals:
-                        # Get the first detection from the first frame of this event
-                        first_frame_detections = visuals[0].get("detections", [])
-                        if first_frame_detections:
-                            label = first_frame_detections[0].get("label", "Unknown")
-                            conf = first_frame_detections[0].get("conf", 0)
-
-                            # Create the button
-                            btn_label = f"{t}s: {label} ({conf:.2f})"
-                            if st.button(btn_label, key=f"t_{job_id}_{t}_{label}"):
+                        first_det = visuals[0].get("detections", [])
+                        if first_det:
+                            label = first_det[0].get("label", "Unknown")
+                            conf = first_det[0].get("conf", 0)
+                            if st.button(
+                                f"{t}s: {label} ({conf:.2f})",
+                                key=f"t_{job_id}_{t}_{label}",
+                            ):
                                 st.session_state.video_start_time = t
                                 st.rerun()
-
-            elif status == "PROCESSING":
-                st.info("Timeline will generate after processing.")
             else:
-                st.write("No specific events detected in this recording.")
+                st.write("No specific events detected.")
 
-    except Exception as e:
-        st.error(f"Sync error: {e}")
+        elif status == "PROCESSING":
+            st.info("Timeline is being generated...")
+            st.spinner("Analyzing frames...")
+        else:
+            st.write("No timeline data available yet.")
 
 
 #  Main UI
-st.title("BugLens AI: Video Bug Reports")
+st.title("BugLens AI Dashboard")
 
-# Initial fetch for metrics
-try:
-    initial_jobs = fetch_api_data("/jobs").json()
-except httpx.HTTPError as e:
-    initial_jobs = []
-    st.error(f"Error fetching jobs: {e}")
-
+# Metrics
+res_metrics = fetch_api_data("/jobs")
+initial_jobs = res_metrics.json() if res_metrics else []
 m1, m2, m3 = st.columns(3)
 m1.metric("Total Reports", len(initial_jobs))
-m2.metric("System Status", "Online" if initial_jobs is not None else "Offline")
+m2.metric("System Status", "Online" if res_metrics else "Offline")
 m3.metric("AI Engine", "Llama 3.2 (Ollama)")
 
 st.divider()
@@ -162,13 +179,14 @@ st.divider()
 with st.sidebar:
     st.header("Upload New Video")
     uploaded_file = st.file_uploader("Drop bug recording here...", type=["mp4", "mov"])
-
     if st.button("Submit to Pipeline", width="content") and uploaded_file:
         with st.spinner("Uploading..."):
             files = {"file": (uploaded_file.name, uploaded_file.getvalue())}
             res = httpx.post(f"{API_URL}/upload", files=files)
             if res.status_code == 200:
+                st.cache_data.clear()
                 st.success(f"Job Queued: {res.json()['job_id'][:8]}")
+                time.sleep(0.5)
                 st.rerun()
 
     st.divider()
@@ -176,11 +194,10 @@ with st.sidebar:
         "**Tip:** Speak clearly during the recording so Whisper can catch the bug context."
     )
 
-# MAIN CONTENT: JOB LIST
+# job table
 st.header("Recent Reports")
 jobs_list = render_job_table()
 
-# JOB DETAILS SECTION
 if jobs_list:
     st.divider()
     selected_id = st.selectbox(

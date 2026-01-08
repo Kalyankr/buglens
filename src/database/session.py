@@ -1,3 +1,5 @@
+import os
+
 from loguru import logger
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -5,12 +7,10 @@ from sqlalchemy.orm import sessionmaker
 from src.database.models import Base
 
 # SQLite local database file
-SQLALCHEMY_DATABASE_URL = "sqlite:////app/buglens.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////app/data/buglens.db")
 
 # connect_args={"check_same_thread": False} is required only for SQLite
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
