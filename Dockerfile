@@ -31,7 +31,6 @@ COPY --from=builder /app/.venv /app/.venv
 
 # Copy your source code
 COPY src /app/src
-COPY data /app/data
 
 # Set environment variables
 ENV PATH="/app/.venv/bin:$PATH"
