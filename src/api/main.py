@@ -19,6 +19,7 @@ UPLOAD_DIR = Path("data/raw")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
+# upload video
 @app.post("/upload")
 async def upload_video(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
@@ -46,6 +47,7 @@ async def upload_video(file: UploadFile = File(...), db: Session = Depends(get_d
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
+# get job status
 @app.get("/status/{job_id}")
 async def get_status(job_id: str, db: Session = Depends(get_db)):
     """
@@ -64,6 +66,7 @@ async def get_status(job_id: str, db: Session = Depends(get_db)):
     }
 
 
+# get job list
 @app.get("/jobs")
 async def list_jobs(db: Session = Depends(get_db)):
     """
@@ -79,3 +82,20 @@ async def list_jobs(db: Session = Depends(get_db)):
         }
         for j in jobs
     ]
+
+
+# delete job
+@app.delete("/jobs/{job_id}")
+def delete_job(job_id: str, db: Session = Depends(get_db)):
+    job = db.query(BugJob).filter(BugJob.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Delete the actual video file too
+    video_path = UPLOAD_DIR / job.filename
+    if video_path.exists():
+        video_path.unlink()
+
+    db.delete(job)
+    db.commit()
+    return {"message": "Job deleted"}

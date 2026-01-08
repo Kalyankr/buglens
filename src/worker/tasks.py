@@ -68,28 +68,41 @@ def generate_llm_summary(fusion_data: dict):
     """
     Sends the JSON fusion data to Ollama to generate a human-readable report.
     """
-    # 'host.docker.internal' is the magic URL to talk to  Mac from Docker
+    # 'host.docker.internal' is the URL to talk to  Mac from Docker
     ollama_url = "http://host.docker.internal:11434/api/generate"
 
     prompt = f"""
-    You are BugLens AI. Summarize this screen recording metadata:
-    Transcript: "{fusion_data}"
+    ### ROLE
+    You are 'BugLens Advisor', an expert QA Automation Engineer. Your task is to analyze raw metadata from a screen recording and identify discrepancies.
 
-    Provide a 2-sentence summary of what happened and 
-    list any potential 'bugs' or 'anomalies'.
-    
-    Format:
-    - Summary: (What happened)
-    - Visual Context: (What was seen)
-    - Speech: (What was said)
+    ### DATA INPUT
+    - User Speech (Whisper): "{fusion_data.get("transcript", "No audio detected")}"
+    - Visual Detections (YOLO): {fusion_data.get("ui_logs", "No visual logs")}
+
+    ### INSTRUCTIONS
+    1. **Compare** the user's intent (Speech) with the system's reality (Detections).
+    2. **Identify Anomaly**: Is there a "Mismatch"? (e.g., User says "I'm clicking Login" but YOLO only sees "Error Popup").
+    3. **Tone**: Be professional, concise, and technical.
+
+    ### OUTPUT FORMAT
+    Return your response using this EXACT Markdown structure:
+    **Executive Summary**: (One sentence)
+    **User Intent**: (What the user was trying to do)
+    **Visual Evidence**: (What was actually seen on screen)
+    **Verdict**: (BUG, ANOMALY, or EXPECTED BEHAVIOR)
     """
 
     try:
         response = httpx.post(
             ollama_url,
-            json={"model": "llama3.2:3b", "prompt": prompt, "stream": False},
-            timeout=30.0,
+            json={
+                "model": "llama3.2:3b",
+                "prompt": prompt,
+                "stream": False,
+                "options": {"temperature": 0.3},
+            },
+            timeout=45.0,
         )
-        return response.json().get("response", "Could not generate summary.")
+        return response.json().get("response", "Analysis unavailable.")
     except Exception as e:
         return f"Summarizer error: {str(e)}"
