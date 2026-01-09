@@ -51,7 +51,7 @@ The system operates as a set of microservices orchestrated via Docker Compose:
 ### 2. Quick Start
 ```bash
 # Clone the repository
-git clone [https://github.com/your-username/buglens.git](https://github.com/your-username/buglens.git)
+git clone https://github.com/kalyankr/buglens.git
 cd buglens
 
 # Create a data directory for video storage
@@ -70,4 +70,4 @@ docker compose up --build
 * Use the Bug Timeline to navigate through detected UI events.
 
 ---
-                                                Builty by human curiacity
+                                                Built By Human Curiosity
