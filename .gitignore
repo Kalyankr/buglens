@@ -231,3 +231,6 @@ logs/
 
 # database files
 *.db
+
+# os specific
+.DS_Store

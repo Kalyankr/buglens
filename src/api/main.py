@@ -5,6 +5,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from loguru import logger
 from sqlalchemy.orm import Session
 
+from src.api.schemas import JobStatusResponse
 from src.database.models import BugJob
 from src.database.session import get_db, init_db
 from src.utils.logging_config import setup_logging
@@ -15,7 +16,7 @@ setup_logging()
 init_db()
 
 app = FastAPI(title="BugLens API")
-UPLOAD_DIR = Path("data/raw")
+UPLOAD_DIR = Path("/app/data/raw")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -28,12 +29,15 @@ async def upload_video(file: UploadFile = File(...), db: Session = Depends(get_d
     file_path = UPLOAD_DIR / file.filename
 
     try:
-        # Save file to disk
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # Create Database Record
-        new_job = BugJob(filename=file.filename, status="PENDING")
+        new_job = BugJob(
+            filename=file.filename,
+            file_path=str(file_path),
+            status="PENDING",
+        )
+
         db.add(new_job)
         db.commit()
         db.refresh(new_job)
@@ -42,13 +46,15 @@ async def upload_video(file: UploadFile = File(...), db: Session = Depends(get_d
         logger.info(f"Created Job {new_job.id} for file {file.filename}")
 
         return {"job_id": new_job.id, "status": "QUEUED"}
+
     except Exception as e:
         logger.error(f"Upload failed: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 
 # get job status
-@app.get("/status/{job_id}")
+@app.get("/status/{job_id}", response_model=JobStatusResponse)
 async def get_status(job_id: str, db: Session = Depends(get_db)):
     """
     Check the current status of a bug report.
@@ -57,13 +63,7 @@ async def get_status(job_id: str, db: Session = Depends(get_db)):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    return {
-        "job_id": job.id,
-        "summary": job.summary,
-        "status": job.status,
-        "result": job.result,
-        "created_at": job.created_at,
-    }
+    return job
 
 
 # get job list

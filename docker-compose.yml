@@ -12,11 +12,11 @@ services:
     container_name: buglens_api
     volumes:
       - ./data:/app/data
-      - ./buglens.db:/app/buglens.db
     ports:
       - "8000:8000"
     environment:
       - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=sqlite:////app/data/buglens.db
       - YOLO_CONFIG_DIR=/app
     depends_on:
       - redis
@@ -28,13 +28,12 @@ services:
     container_name: buglens_worker
     volumes:
       - ./data:/app/data
-      - ./buglens.db:/app/buglens.db
     environment:
       - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=sqlite:////app/data/buglens.db
       - YOLO_CONFIG_DIR=/app
     depends_on:
       - redis
-    # Starts the Celery worker
     command: celery -A src.worker.celery_app worker --loglevel=info --concurrency=1
 
     # UI
@@ -43,6 +42,8 @@ services:
     depends_on:
       - api
     container_name: buglens_ui
+    volumes:
+      - ./data:/app/data
     ports:
       - "8501:8501"
     command: streamlit run src/ui/dashboard.py --server.port 8501 --server.address 0.0.0.0
